@@ -19,7 +19,7 @@
 #ifndef PHP_JUDY_H
 #define PHP_JUDY_H
 
-#define PHP_JUDY_VERSION "1.0.2"
+#define PHP_JUDY_VERSION "2.0.0"
 #define PHP_JUDY_EXTNAME "judy"
 
 #include <Judy.h>
@@ -72,18 +72,16 @@ typedef enum _judy_type {
     zend_error_handling error_handling; \
     zend_replace_error_handling(EH_THROW, NULL, &error_handling TSRMLS_CC);
 
-#define JUDY_METHOD_GET_OBJECT \
-    zval *object = getThis(); \
-    judy_object *intern = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
-
-typedef struct _judy_object {
-	zend_object     std;
+typedef struct _judy_object {	
 	long            type;
 	Pvoid_t         array;
 	unsigned long   counter;
 	Word_t			next_empty;
 	zend_bool		next_empty_is_valid;
+	zend_object     std;
 } judy_object;
+
+#define JUDY_METHOD_GET_OBJECT judy_object *intern = Z_JUDY_OBJECT_P(getThis());
 
 /* Max length, this must be a constant for it to work in
  * declarings as we cannot use runtime decided values at
@@ -93,10 +91,10 @@ typedef struct _judy_object {
  */
 #define PHP_JUDY_MAX_LENGTH 65536
 
-zend_object_value judy_object_new(zend_class_entry *ce TSRMLS_DC);
-zend_object_value judy_object_new_ex(zend_class_entry *ce, judy_object **ptr TSRMLS_DC);
+zend_object* judy_object_new(zend_class_entry *ce TSRMLS_DC);
+zend_object* judy_object_new_ex(zend_class_entry *ce, judy_object **ptr TSRMLS_DC);
 
-zval *judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC);
+zval* judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC, zval *rv);
 int judy_object_write_dimension_helper(zval *object, zval *offset, zval *value TSRMLS_DC);
 int judy_object_has_dimension_helper(zval *object, zval *offset, int check_empty TSRMLS_DC);
 int judy_object_unset_dimension_helper(zval *object, zval *offset TSRMLS_DC);
@@ -120,6 +118,11 @@ ZEND_EXTERN_MODULE_GLOBALS(judy)
 
 /* Grabbing CE's so that other exts can use the date objects too */
 PHP_JUDY_API zend_class_entry *php_judy_ce(void);
+
+judy_object* php_judy_object_fetch_object(zend_object *obj);
+
+#define Z_JUDY_OBJECT(zv) php_judy_object_fetch_object(zv)
+#define Z_JUDY_OBJECT_P(zv) Z_JUDY_OBJECT(Z_OBJ_P(zv))
 
 #endif    /* PHP_JUDY_H */
 

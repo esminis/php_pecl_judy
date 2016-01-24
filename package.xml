@@ -20,18 +20,15 @@
 -->
  <date>2013-11-03</date>
  <version>
-  <release>1.0.2</release>
-  <api>1.0.0</api>
+  <release>2.0.0</release>
+  <api>2.0.0</api>
  </version>
  <stability>
   <release>stable</release>
   <api>stable</api>
  </stability>
  <license uri="http://www.php.net/license">PHP</license>
- <notes>
-- Bug fix with count/size, see https://github.com/orieg/php-judy/issues/15
-- Add missing test files in package.xml
- </notes>
+ <notes>Ported to PHP7</notes>
  <contents>
   <dir name="/">
    <dir name="examples">
@@ -118,6 +115,18 @@
   <configureoption default="autodetect" name="with-judy" prompt="Please provide the prefix of libJudy installation" />
  </extsrcrelease>
  <changelog>
+  <release>
+   <date>2016-01-24</date>
+   <version>
+    <release>2.0.0</release>
+    <api>2.0.0</api>
+   </version>
+   <stability>
+    <release>stable</release>
+    <api>stable</api>
+   </stability>
+   <notes>Ported to PHP7</notes>
+  </release>
   <release>
    <date>2013-10-20</date>
    <version>

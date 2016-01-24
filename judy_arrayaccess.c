@@ -57,17 +57,17 @@ PHP_METHOD(judy, offsetUnset)
    Fetch the given offset in the Judy Array */
 PHP_METHOD(judy, offsetGet)
 {
-	zval *offset, *result;
+	zval *offset, result;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &offset) == FAILURE) {
 		RETURN_FALSE;
 	}
 
-	result = judy_object_read_dimension_helper(getThis(), offset TSRMLS_CC);
-	if (!result) {
+	judy_object_read_dimension_helper(getThis(), offset TSRMLS_CC, &result);
+	if (ZVAL_IS_NULL(&result)) {
 		RETURN_FALSE;
 	}
-	RETURN_ZVAL(result, 1, 0);
+	RETURN_ZVAL(&result, 1, 0);
 }
 /* }}} */
 
