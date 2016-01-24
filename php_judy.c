@@ -801,7 +801,7 @@ PHP_METHOD(judy, first)
 				RETURN_LONG(index);
 		} else if (intern->type == TYPE_STRING_TO_INT || intern->type == TYPE_STRING_TO_MIXED) {
 			char        *str;
-			int         str_length = 0;
+			zend_long         str_length = 0;
 
 			uint8_t     key[PHP_JUDY_MAX_LENGTH];
 			PWord_t     PValue;
@@ -859,7 +859,7 @@ PHP_METHOD(judy, next)
 				RETURN_LONG(index);
 		} else if (intern->type == TYPE_STRING_TO_INT || intern->type == TYPE_STRING_TO_MIXED) {
 			char        *str;
-			int         str_length;
+			zend_long         str_length;
 
 			uint8_t     key[PHP_JUDY_MAX_LENGTH];
 			PWord_t     PValue;
@@ -917,7 +917,7 @@ PHP_METHOD(judy, last)
 				RETURN_LONG(index);
 		} else if (intern->type == TYPE_STRING_TO_INT || intern->type == TYPE_STRING_TO_MIXED) {
 			uint8_t     *str;
-			int         str_length = 0;
+			zend_long         str_length = 0;
 
 			uint8_t     key[PHP_JUDY_MAX_LENGTH];
 			PWord_t     PValue;
@@ -976,7 +976,7 @@ PHP_METHOD(judy, prev)
 				RETURN_LONG(index);
 		} else if (intern->type == TYPE_STRING_TO_INT || intern->type == TYPE_STRING_TO_MIXED) {
 			char        *str;
-			int         str_length;
+			zend_long         str_length;
 
 			uint8_t     key[PHP_JUDY_MAX_LENGTH];
 			PWord_t     PValue;
