@@ -26,6 +26,10 @@
 #include "judy_iterator.h"
 #include "ext/spl/spl_iterators.h"
 
+judy_object* php_judy_object_fetch_object(zend_object *obj) {
+      return (judy_object*)((char *)obj - XtOffsetOf(judy_object, std));
+}
+
 ZEND_DECLARE_MODULE_GLOBALS(judy)
 
 /* declare judy class entry */
@@ -42,26 +46,19 @@ static void php_judy_init_globals(zend_judy_globals *judy_globals)
 
 /* {{{ judy_free_storage
    close all resources and the memory allocated for the object */
-static void judy_object_free_storage(void *object TSRMLS_DC)
+static void judy_object_free_storage(zend_object *object TSRMLS_DC)
 {
-	judy_object *intern = (judy_object *) object;
-	zend_object_std_dtor(&intern->std TSRMLS_CC);
-	efree(object);
+	zend_object_std_dtor(&(Z_JUDY_OBJECT(object)->std) TSRMLS_CC);
 }
 /* }}} */
 
 /* {{{ judy_object_new_ex
 */
-zend_object_value judy_object_new_ex(zend_class_entry *ce, judy_object **ptr TSRMLS_DC)
+zend_object* judy_object_new_ex(zend_class_entry *ce, judy_object **ptr TSRMLS_DC)
 {
-	zend_object_value retval;
 	judy_object *intern;
-#if PHP_VERSION_ID < 50399
-	zval *tmp;
-#endif
 
-	intern = ecalloc(1, sizeof(judy_object));
-	memset(intern, 0, sizeof(judy_object));
+	intern = ecalloc(1, sizeof(judy_object) + zend_object_properties_size(ce));
 	if (ptr) {
 		*ptr = intern;
 	}
@@ -69,26 +66,17 @@ zend_object_value judy_object_new_ex(zend_class_entry *ce, judy_object **ptr TSR
 	intern->next_empty_is_valid = 1;
 	intern->next_empty = 0;
 
-	zend_object_std_init(&(intern->std), ce TSRMLS_CC);
-
-#if PHP_VERSION_ID < 50399
-	zend_hash_copy(intern->std.properties,
-			&ce->default_properties, (copy_ctor_func_t) zval_add_ref,
-			(void *) &tmp, sizeof(zval *));
-#else
+	zend_object_std_init(&intern->std, ce TSRMLS_CC);
 	object_properties_init(&intern->std, ce);
-#endif
+	intern->std.handlers = &judy_handlers;
 
-	retval.handle = zend_objects_store_put(intern, (zend_objects_store_dtor_t) zend_objects_destroy_object, (zend_objects_free_object_storage_t) judy_object_free_storage, NULL TSRMLS_CC);
-	retval.handlers = &judy_handlers;
-
-	return retval;
+	return &intern->std;
 }
 /* }}} */
 
 /* {{{ judy_object_new
 */
-zend_object_value judy_object_new(zend_class_entry *ce TSRMLS_DC)
+zend_object* judy_object_new(zend_class_entry *ce TSRMLS_DC)
 {
 	return judy_object_new_ex(ce, NULL TSRMLS_CC);
 }
@@ -114,7 +102,6 @@ PHP_INI_END()
 			if (Z_TYPE_P(offset) != IS_LONG) {	\
 				zval tmp = *offset;				\
 				zval_copy_ctor(&tmp);			\
-				INIT_PZVAL(&tmp);				\
 				convert_to_long(&tmp);			\
 				_index_ = Z_LVAL(tmp);			\
 			} else {							\
@@ -128,7 +115,6 @@ PHP_INI_END()
 			if (Z_TYPE_P(offset) != IS_STRING) {	\
 				*_string_key_ = *offset;			\
 				zval_copy_ctor(_string_key_);		\
-				INIT_PZVAL(_string_key_);			\
 				convert_to_string(_string_key_);	\
 			} else {								\
 				_string_key_ = offset;	\
@@ -139,17 +125,17 @@ PHP_INI_END()
 			_return_;						\
 	}
 
-zval *judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC) /* {{{ */
+zval* judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC, zval *rv) /* {{{ */
 {
-	long index = 0;
+	long index = 0;	
 	Word_t j_index;
 	Pvoid_t *PValue = NULL;
-	zval *result = NULL;
 	zval string_key, *pstring_key = &string_key;
-	judy_object *intern = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
-
+	judy_object *intern = Z_JUDY_OBJECT_P(object);
+	
 	if (intern->array == NULL) {
-		return NULL;
+		ZVAL_NULL(rv);
+		return rv;
 	}
 
 	CHECK_ARRAY_AND_ARG_TYPE(index, pstring_key, return NULL);
@@ -160,11 +146,8 @@ zval *judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC) /*
 		int     Rc_int;
 
 		J1T(Rc_int, intern->array, j_index);
-		MAKE_STD_ZVAL(result);
-		Z_SET_REFCOUNT_P(result, 0);
-		Z_UNSET_ISREF_P(result);
-		ZVAL_BOOL(result, Rc_int);
-		return result;
+		ZVAL_BOOL(rv, Rc_int);
+		return rv;
 	}
 
 	switch(intern->type) {
@@ -180,28 +163,25 @@ zval *judy_object_read_dimension_helper(zval *object, zval *offset TSRMLS_DC) /*
 
 	if (PValue != NULL && PValue != PJERR) {
 		if (intern->type == TYPE_INT_TO_INT || intern->type == TYPE_STRING_TO_INT) {
-			MAKE_STD_ZVAL(result);
-			Z_SET_REFCOUNT_P(result, 0);
-			Z_UNSET_ISREF_P(result);
-			ZVAL_LONG(result, (long)*PValue);
+			ZVAL_LONG(rv, (long)*PValue);
 		} else if (intern->type == TYPE_INT_TO_MIXED || intern->type == TYPE_STRING_TO_MIXED) {
-			result = (zval *)*PValue;
+			ZVAL_COPY(rv, (zval *)*PValue);
 		}
 		if (pstring_key != offset) {
 			zval_dtor(pstring_key);
 		}
-		return result;
+		return rv;
 	}
 	if (pstring_key != offset) {
 		zval_dtor(pstring_key);
 	}
-	return NULL;
+	ZVAL_NULL(rv);
+	return rv;
 }
 /* }}} */
-
-static zval *judy_object_read_dimension(zval *object, zval *offset, int type TSRMLS_DC) /* {{{ */
-{
-	return judy_object_read_dimension_helper(object, offset TSRMLS_CC);
+static zval *judy_object_read_dimension(zval *object, zval *offset, int type TSRMLS_DC, zval *rv) /* {{{ */
+{	
+	return judy_object_read_dimension_helper(object, offset TSRMLS_CC, rv);
 }
 /* }}} */
 
@@ -209,7 +189,7 @@ int judy_object_write_dimension_helper(zval *object, zval *offset, zval *value T
 {
 	long dummy;
 	zval string_key, *pstring_key = &string_key;
-	judy_object *intern = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
+	judy_object *intern = Z_JUDY_OBJECT_P(object);
 
 	if (offset) {
 		CHECK_ARRAY_AND_ARG_TYPE(dummy, pstring_key, return FAILURE);
@@ -220,7 +200,6 @@ int judy_object_write_dimension_helper(zval *object, zval *offset, zval *value T
 			return FAILURE;
 		}
 	}
-
 	if (intern->type == TYPE_BITSET) {
 		Word_t		index;
 		int         Rc_int;
@@ -334,15 +313,15 @@ int judy_object_write_dimension_helper(zval *object, zval *offset, zval *value T
 			index = Z_LVAL_P(offset);
 			intern->next_empty_is_valid = 0;
 		}
-
+		
 		JLI(PValue, intern->array, index);
 		if (PValue != NULL && PValue != PJERR) {
-			if (*PValue != NULL) {
-				zval *old_value = (zval *)*PValue;
-				zval_ptr_dtor(&old_value);
+			if (*PValue != NULL) {				
+				zval_ptr_dtor((zval *)*PValue);
+				efree(*PValue);
 			}
-			*PValue = value;
-			Z_ADDREF_P(value);
+			*PValue = emalloc(sizeof(zval));
+			ZVAL_COPY(*PValue, value);
 			return SUCCESS;
 		}
 		return FAILURE;
@@ -369,13 +348,13 @@ int judy_object_write_dimension_helper(zval *object, zval *offset, zval *value T
 		JSLI(PValue, intern->array, (uint8_t *)Z_STRVAL_P(pstring_key));
 		if (PValue != NULL && PValue != PJERR) {
 			if (*PValue != NULL) {
-				zval *old_value = (zval *)*PValue;
-				zval_ptr_dtor(&old_value);
+				zval_ptr_dtor((zval *)*PValue);
+				efree(*PValue);
 			} else {
 			    intern->counter++;
             }
-			*PValue = value;
-			Z_ADDREF_P(value);
+			*PValue = emalloc(sizeof(zval));
+			ZVAL_COPY(*PValue, value);
 			res = SUCCESS;
 		} else {
 			res = FAILURE;
@@ -401,7 +380,7 @@ int judy_object_has_dimension_helper(zval *object, zval *offset, int check_empty
 	Word_t j_index;
 	Pvoid_t *PValue = NULL;
 	zval string_key, *pstring_key = &string_key;
-	judy_object *intern = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
+	judy_object *intern = Z_JUDY_OBJECT_P(object);
 
 	if (intern->array == NULL) {
 		return 0;
@@ -463,7 +442,7 @@ int judy_object_unset_dimension_helper(zval *object, zval *offset TSRMLS_DC) /* 
 	long index = 0;
 	Word_t j_index;
 	zval string_key, *pstring_key = &string_key;
-	judy_object *intern = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
+	judy_object *intern = Z_JUDY_OBJECT_P(object);
 
 	if (intern->array == NULL) {
 		return FAILURE;
@@ -484,7 +463,8 @@ int judy_object_unset_dimension_helper(zval *object, zval *offset TSRMLS_DC) /* 
 			JLG(PValue, intern->array, j_index);
 			if (PValue != NULL && PValue != PJERR) {
 				zval *value = (zval *)*PValue;
-				zval_ptr_dtor(&value);
+				zval_ptr_dtor(value);
+				efree(value);
 				JLD(Rc_int, intern->array, j_index);
 			}
 		}
@@ -499,7 +479,8 @@ int judy_object_unset_dimension_helper(zval *object, zval *offset TSRMLS_DC) /* 
 			JSLG(PValue, intern->array, (uint8_t *)Z_STRVAL_P(pstring_key));
 			if (PValue != NULL && PValue != PJERR) {
 				zval *value = (zval *)*PValue;
-				zval_ptr_dtor(&value);
+				zval_ptr_dtor(value);
+				efree(value);
 				JSLD(Rc_int, intern->array, (uint8_t *)Z_STRVAL_P(pstring_key));
 			}
 		}
@@ -534,13 +515,15 @@ PHP_MINIT_FUNCTION(judy)
 
 	INIT_CLASS_ENTRY(ce, "Judy", judy_class_methods);
 
-	judy_ce = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC);
+	judy_ce = zend_register_internal_class_ex(&ce, NULL);
 	judy_ce->create_object = judy_object_new;
 
-	memcpy(&judy_handlers, zend_get_std_object_handlers(),
-			sizeof(zend_object_handlers));
+	memcpy(&judy_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 
 	/* set some internal handlers */
+	judy_handlers.offset = XtOffsetOf(judy_object, std);
+	judy_handlers.dtor_obj = zend_objects_destroy_object;
+	judy_handlers.free_obj = judy_object_free_storage;
 	judy_handlers.clone_obj = judy_object_clone;
 	judy_handlers.count_elements = judy_object_count;
 	judy_handlers.read_dimension = judy_object_read_dimension;
@@ -597,7 +580,7 @@ PHP_MINFO_FUNCTION(judy)
    Constructs a new Judy array of the given type */
 PHP_METHOD(judy, __construct)
 {
-	long                    type;
+	zend_long                    type;
 	judy_type               jtype;
 
 	JUDY_METHOD_GET_OBJECT
@@ -621,10 +604,8 @@ PHP_METHOD(judy, __construct)
    Free Judy array and any other references */
 PHP_METHOD(judy, __destruct)
 {
-	zval *object = getThis();
-
 		/* calling the object's free() method */
-		zend_call_method_with_0_params(&object, NULL, NULL, "free", NULL);
+		zend_call_method_with_0_params(getThis(), NULL, NULL, "free", NULL);
 }
 /* }}} */
 
@@ -659,7 +640,8 @@ PHP_METHOD(judy, free)
 			while(PValue != NULL && PValue != PJERR)
 			{
 				zval *value = (zval *)*PValue;
-				zval_ptr_dtor(&value);
+				zval_ptr_dtor(value);
+				efree(value);
 				JLN(PValue, intern->array, index);
 			}
 
@@ -683,7 +665,8 @@ PHP_METHOD(judy, free)
 			while(PValue != NULL && PValue != PJERR)
 			{
 				zval *value = (zval *)*PValue;
-				zval_ptr_dtor(&value);
+				zval_ptr_dtor(value);
+				efree(value);
 				JSLN(PValue, intern->array, kindex);
 			}
 
@@ -838,7 +821,7 @@ PHP_METHOD(judy, first)
 
 			JSLF(PValue, intern->array, key);
 			if (PValue != NULL && PValue != PJERR)
-				RETURN_STRING((char *)key, 1);
+				RETURN_STRING((char *)key);
 		}
 
 	RETURN_NULL();
@@ -896,7 +879,7 @@ PHP_METHOD(judy, next)
 
 			JSLN(PValue, intern->array, key);
 			if (PValue != NULL && PValue != PJERR)
-				RETURN_STRING((char *)key, 1);
+				RETURN_STRING((char *)key);
 		}
 
 	RETURN_NULL();
@@ -955,7 +938,7 @@ PHP_METHOD(judy, last)
 
 			JSLL(PValue, intern->array, key);
 			if (PValue != NULL && PValue != PJERR)
-				RETURN_STRING((char *)key, 1);
+				RETURN_STRING((char *)key);
 		}
 
 	RETURN_NULL();
@@ -1013,7 +996,7 @@ PHP_METHOD(judy, prev)
 
 			JSLP(PValue, intern->array, key);
 			if (PValue != NULL && PValue != PJERR)
-				RETURN_STRING((char *)key, 1);
+				RETURN_STRING((char *)key);
 		}
 
 	RETURN_NULL();
@@ -1160,9 +1143,9 @@ PHP_METHOD(judy, getType)
 /* {{{ proto string judy_version()
    Return the php judy version */
 PHP_FUNCTION(judy_version)
-{
-	if (return_value_used) {
-		RETURN_STRING(PHP_JUDY_VERSION, strlen(PHP_JUDY_VERSION));
+{	
+	if (USED_RET()) {
+		RETURN_STRINGL(PHP_JUDY_VERSION, strlen(PHP_JUDY_VERSION));
 	} else {
 		php_printf("PHP Judy Version: %s\n", PHP_JUDY_VERSION);
 	}
@@ -1180,7 +1163,7 @@ PHP_FUNCTION(judy_type)
 		RETURN_FALSE;
 	}
 
-	array = (judy_object *) zend_object_store_get_object(object TSRMLS_CC);
+	array = Z_JUDY_OBJECT_P(object);
 	RETURN_LONG(array->type);
 }
 /* }}} */

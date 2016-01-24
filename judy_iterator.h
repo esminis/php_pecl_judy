@@ -23,8 +23,8 @@
 
 #define JUDY_ITERATOR_GET_OBJECT \
 	judy_iterator 	*it = (judy_iterator*) iterator; \
-	zval			*intern = (zval*) it->intern.data; \
-	judy_object 	*object = (judy_object*) zend_object_store_get_object(intern TSRMLS_CC);
+	zval			*intern = (zval*)(&it->intern.data); \
+	judy_object 	*object = Z_JUDY_OBJECT_P(intern);
 
 /* {{{ judy_iterator
  define an overloaded structure */
@@ -42,7 +42,7 @@ zend_object_iterator *judy_get_iterator(zend_class_entry *ce, zval *object, int 
  */
 void judy_iterator_dtor(zend_object_iterator *iterator TSRMLS_DC);
 int judy_iterator_valid(zend_object_iterator *iterator TSRMLS_DC);
-void judy_iterator_current_data(zend_object_iterator *iterator,	zval ***data TSRMLS_DC);
+zval *judy_iterator_current_data(zend_object_iterator *iterator);
 #if ZEND_MODULE_API_NO >= 20121212
 void judy_iterator_current_key(zend_object_iterator *iterator, zval *key TSRMLS_DC);
 #else
