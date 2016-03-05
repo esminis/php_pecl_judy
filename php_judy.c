@@ -550,6 +550,9 @@ PHP_MINIT_FUNCTION(judy)
 */
 PHP_RINIT_FUNCTION(judy)
 {
+	#if defined(COMPILE_DL_JUDY) && defined(ZTS)
+		ZEND_TSRMLS_CACHE_UPDATE();
+	#endif
 	return SUCCESS;
 }
 /* }}} */
@@ -1348,6 +1351,9 @@ zend_module_entry judy_module_entry = {
 /* }}} */
 
 #ifdef COMPILE_DL_JUDY
+#ifdef ZTS
+	ZEND_TSRMLS_CACHE_DEFINE();
+#endif
 ZEND_GET_MODULE(judy)
 #endif
 

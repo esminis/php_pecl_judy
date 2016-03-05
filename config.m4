@@ -48,7 +48,7 @@ if test "$PHP_JUDY" != "no"; then
   ])
 
   PHP_INSTALL_HEADERS([ext/judy], [php_judy.h judy_handlers.h judy_arrayaccess.h judy_iterator.h])
-  PHP_NEW_EXTENSION(judy, php_judy.c $judy_sources, $ext_shared)
+  PHP_NEW_EXTENSION(judy, php_judy.c $judy_sources, $ext_shared,,-DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
   PHP_ADD_BUILD_DIR($ext_builddir/lib, 1)
   PHP_SUBST(JUDY_SHARED_LIBADD)
 

@@ -19,7 +19,7 @@
 #ifndef PHP_JUDY_H
 #define PHP_JUDY_H
 
-#define PHP_JUDY_VERSION "2.0.0"
+#define PHP_JUDY_VERSION "2.0.1"
 #define PHP_JUDY_EXTNAME "judy"
 
 #include <Judy.h>
@@ -111,7 +111,10 @@ ZEND_END_MODULE_GLOBALS(judy)
 ZEND_EXTERN_MODULE_GLOBALS(judy)
 
 #ifdef ZTS
-#define JUDY_G(v) TSRMG(judy_globals_id, zend_judy_globals *, v)
+#if defined(COMPILE_DL_JUDY)
+	ZEND_TSRMLS_CACHE_EXTERN();
+#endif
+#define JUDY_G(v) ZEND_TSRMG(judy_globals_id, zend_judy_globals *, v)
 #else
 #define JUDY_G(v) (judy_globals.v)
 #endif
